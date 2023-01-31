@@ -4,6 +4,7 @@
 
 # This file contains Telegram interactions
 
+from config import *
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, filters, MessageHandler
 from payload import *
@@ -16,24 +17,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ACTION, FORMAT, MESSAGE = range(3)
-
-def getToken():
-	with open(os.path.realpath(os.path.dirname(__file__)) + '/' + 'token.txt', 'r') as file:
-		return file.read()
-
+PASSWORD, ACTION, FORMAT, MESSAGE = range(4)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    reply_keyboard = [["Enable input", "Disable input", "Lock screen", "Format volumes", "Play message"]]
+    await update.message.reply_text("Enter password.")
 
-    await update.message.reply_text(
-        "Choose your action:",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Choose your action"
-        ),
-    )
+    return PASSWORD
 
-    return ACTION
+async def show_keyboard(update: Update):
+	reply_keyboard = [["Enable input", "Disable input", "Lock screen", "Format volumes", "Play message"]]
+
+	await update.message.reply_text(
+		"Choose your action:",
+		reply_markup=ReplyKeyboardMarkup(
+			reply_keyboard, one_time_keyboard=True, input_field_placeholder="Choose your action"
+		),
+	)
+
+async def password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+	user = update.message.from_user
+
+	if update.message.text == master_password:
+		logger.info("User %s logged in.", user.first_name)
+		await show_keyboard(update)
+
+		return ACTION
+
+	logger.info("User %s failed to log in.", user.first_name)
+	await update.message.reply_text("Wrong password entered, please try again.")
+
+	return PASSWORD
 
 async def action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	user = update.message.from_user
@@ -43,17 +56,20 @@ async def action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 			logger.info("Got a request from %s to enable input.", user.first_name)
 			enableInput()
 			await update.message.reply_text("Input enabled.", reply_markup=ReplyKeyboardRemove())
-			return ConversationHandler.END
+			await show_keyboard(update)
+			return ACTION
 		case "Disable input":
 			logger.info("Got a request from %s to disable input.", user.first_name)
 			disableInput()
 			await update.message.reply_text("Input disabled.", reply_markup=ReplyKeyboardRemove())
-			return ConversationHandler.END
+			await show_keyboard(update)
+			return ACTION
 		case "Lock screen":
 			logger.info("Got a request from %s to lock screen.", user.first_name)
 			lockScreen()
 			await update.message.reply_text("Screen locked.", reply_markup=ReplyKeyboardRemove())
-			return ConversationHandler.END
+			await show_keyboard(update)
+			return ACTION
 		case "Format volumes":
 			logger.info("Got a request from %s to format volumes.", user.first_name)
 			await update.message.reply_text("Please type a space-separated list of the volumes you want to format.", reply_markup=ReplyKeyboardRemove())
@@ -70,7 +86,8 @@ async def format(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	Thread(target=formatVolumes,args=(update.message.text.split(),)).start()
 	await update.message.reply_text("Command to format the volumes sent.")
 
-	return ConversationHandler.END
+	await show_keyboard(update)
+	return ACTION
 
 async def message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	user = update.message.from_user
@@ -78,21 +95,23 @@ async def message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	Thread(target=playMessage,args=(update.message.text,)).start()
 	await update.message.reply_text("Command to play the message sent.")
 
-	return ConversationHandler.END
+	await show_keyboard(update)
+	return ACTION
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	user = update.message.from_user
-	logger.info("User %s canceled the conversation.", user.first_name)
+	logger.info("User %s cancelled the conversation.", user.first_name)
 	await update.message.reply_text("Request cancelled.", reply_markup=ReplyKeyboardRemove())
 
 	return ConversationHandler.END
 
 def startBot():
-	application = Application.builder().token(getToken()).build()
+	application = Application.builder().token(token).build()
 	
 	conv_handler = ConversationHandler(
 		entry_points=[CommandHandler("start", start)],
 		states={
+			PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, password)],
 			ACTION: [MessageHandler(filters.Regex("^(Enable input|Disable input|Lock screen|Format volumes|Play message)$"), action)],
 			FORMAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, format)],
 			MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, message)],

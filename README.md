@@ -2,9 +2,6 @@
 
 This program is a PC kill switch Telegram bot. It is a project for New Generation.
 
-## Security notice
-This program provides no access control, so anyone knowing the bot username is able to use it.
-
 ## Features
 - disabling and re-enabling keyboard and mouse input
 - locking the screen
@@ -17,7 +14,7 @@ This program provides no access control, so anyone knowing the bot username is a
 - works on Windows only
 
 ## Usage
-Before starting the bot, its token must be put into token.txt file with no newlines. Administrator privileges are required so that the bot is able to disable input and format partitions. Once the bot is started, send /start to its account on Telegram to see what can be done.
+Before starting the bot, copy config-example.py file to config.py and put the password and the token. Administrator privileges are required so that the bot is able to disable input and format partitions. Once the bot is started, send /start to its account on Telegram and enter the password to see what can be done.
 
 ## Licensing
 All code in this repository is Unlicensed, see UNLICENSE.
