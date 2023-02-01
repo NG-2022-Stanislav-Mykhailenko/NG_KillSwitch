@@ -3,6 +3,8 @@
 # License: Unlicense
 
 import ctypes, sys
+
+from googledrive import authenticate
 from tg import startBot
 
 def main() -> None:
@@ -12,4 +14,5 @@ def main() -> None:
 		ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
 
 if __name__ == '__main__':
+	authenticate()
 	main()

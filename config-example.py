@@ -9,3 +9,6 @@ token = "put your token here"
 
 # Bot password
 master_password = "put your password here"
+
+# Google Drive folder to be used by the program
+root_folder = "put folder ID here"
