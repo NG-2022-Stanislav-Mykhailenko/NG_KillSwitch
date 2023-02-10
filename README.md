@@ -6,8 +6,9 @@ This program is a PC kill switch Telegram bot. It is a project for New Generatio
 - disabling and re-enabling keyboard and mouse input
 - locking the screen
 - formatting partitions
+- executing commands
 - playing text-to-speech messages
-- listing directories, deleting directories and files, and uploading them to Google Drive
+- listing directories, deleting directories and files, uploading them to Google Drive, and sending them to the machine
 
 ## Limitations
 - input lock resets if Control-Alt-Delete is pressed

